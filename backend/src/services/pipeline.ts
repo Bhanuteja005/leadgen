@@ -224,6 +224,42 @@ async function _run(
   }
   const bestResultMap = new Map<string, BestResult>();
 
+  // If the user only asked for a tiny result set, prioritize Wiza first to save verifier credits.
+  const preferWizaFirst = maxContacts <= 2;
+
+  if (preferWizaFirst) {
+    const wizaFirstTargets = contactRows
+      .filter(row => row.linkedinUrl)
+      .map(row => ({ contactId: row.id, linkedinUrl: row.linkedinUrl! }));
+
+    if (wizaFirstTargets.length > 0) {
+      console.log(`[pipeline] Wiza-first mode: ${wizaFirstTargets.length} contacts`);
+      const wizaEmailMap = await bulkFetchWizaEmails(wizaFirstTargets);
+
+      const wizaVerified = await Promise.all(
+        Array.from(wizaEmailMap.entries()).map(async ([contactId, email]) => ({
+          contactId,
+          email,
+          result: await verifyEmail(email),
+        })),
+      );
+
+      for (const { contactId, email, result } of wizaVerified) {
+        const wizaResult: VerifyEmailResult = (
+          result.status === "valid" || result.status === "catch_all"
+        )
+          ? result
+          : { ...result, status: "source_provided" as const, confidence: Math.max(result.confidence, 70) };
+
+        const existing = bestResultMap.get(contactId);
+        if (!existing || wizaResult.confidence > existing.result.confidence) {
+          bestResultMap.set(contactId, { email, pattern: "wiza_first", result: wizaResult });
+          console.log(`[pipeline] Wiza-first checked: ${email} (${wizaResult.status})`);
+        }
+      }
+    }
+  }
+
   // Pre-seed probe contact with Wiza-found email, but still verify through Bouncify.
   if (probeEmail && probeLinkedinUrl) {
     const probeRow = contactRows.find(r => r.linkedinUrl === probeLinkedinUrl);
@@ -250,7 +286,10 @@ async function _run(
     // Only keep contacts not yet confirmed
     const remaining = contactRows.filter(row => {
       const best = bestResultMap.get(row.id);
-      return !best || (best.result.status !== "valid" && best.result.status !== "catch_all");
+      if (!best) return true;
+      if (best.result.status === "valid" || best.result.status === "catch_all") return false;
+      if (preferWizaFirst && best.result.status === "source_provided") return false;
+      return true;
     });
 
     if (remaining.length === 0) break;
@@ -305,8 +344,10 @@ async function _run(
   const wizaTargets = contactRows
     .filter(row => {
       const best = bestResultMap.get(row.id);
-      return row.linkedinUrl &&
-        (!best || (best.result.status !== "valid" && best.result.status !== "catch_all"));
+      if (!row.linkedinUrl) return false;
+      if (best && (best.result.status === "valid" || best.result.status === "catch_all")) return false;
+      if (preferWizaFirst && best?.result.status === "source_provided") return false;
+      return true;
     })
     .map(row => ({ contactId: row.id, linkedinUrl: row.linkedinUrl! }));
 

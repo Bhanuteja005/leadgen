@@ -1,8 +1,8 @@
 
-# 🚀 ProspectIQ - AI Marketing Automation Platform
+# 🚀 LeadGen - AI Marketing Automation Platform
 
 ## 🌟 Introduction
-ProspectIQ is an AI-powered marketing automation platform that transforms your marketing workflow in seconds. Built with modern technologies, it offers a sleek interface for managing marketing campaigns, content generation, and performance analytics.
+LeadGen is an AI-powered marketing automation platform that transforms your marketing workflow in seconds. Built with modern technologies, it offers a sleek interface for managing marketing campaigns, content generation, and performance analytics.
 
 ## 💻 Tech Stack
 

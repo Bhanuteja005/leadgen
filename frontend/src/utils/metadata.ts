@@ -16,8 +16,8 @@ interface MetadataProps {
 }
 
 export const generateMetadata = ({
-    title = `ProspectIQ - B2B lead generation system`,
-    description = `ProspectIQ is an intelligent B2B lead generation system that leverages AI to find verified contacts at any company. Powered by Hunter.io, Apollo, and LinkedIn, ProspectIQ helps you discover key decision-makers and grow your business with confidence.`,
+    title = `LeadGen - B2B lead generation system`,
+    description = `LeadGen is an intelligent B2B lead generation system that leverages AI to find verified contacts at any company. Powered by Hunter.io, Apollo, and LinkedIn, LeadGen helps you discover key decision-makers and grow your business with confidence.`,
     icons = [
         {
             rel: "icon",
