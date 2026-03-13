@@ -16,6 +16,14 @@ app.use(express.json({ limit: "1mb" }));
 // Health check — no auth required
 app.get("/health", (_req, res) => res.json({ status: "ok" }));
 
+// Root route (useful for deployments like Vercel where / is often pinged)
+app.get("/", (_req, res) =>
+  res.json({
+    status: "ok",
+    message: "Leadgen backend is running. Use /api/search (POST) or /api/analyze-prd (POST).",
+  }),
+);
+
 // All /api routes require API key (skip for export via ?api_key query param)
 app.use("/api", apiKeyMiddleware);
 app.use("/api/search",      searchRouter);
