@@ -11,6 +11,7 @@
  */
 import { ApifyClient } from "apify-client";
 import { config } from "../config";
+import "proxy-agent"; // Force Vercel's ncc to trace and bundle this dependency
 
 export interface ScrapedEmployee {
   fullName: string;
@@ -21,7 +22,7 @@ export interface ScrapedEmployee {
   linkedinUrl: string;
 }
 
-// ── helpers ──────────────────────────────────────────────────────────────────
+//  helpers 
 
 /**
  * Build candidate LinkedIn company slugs from a company name.
@@ -32,14 +33,14 @@ export interface ScrapedEmployee {
  * "-tech", or "-inc" appended even when their display name is shorter.
  *
  * Examples:
- *   "Juspay"          → ["juspay", "juspay-technologies", "juspay-tech", ...]
- *   "Google LLC"      → ["google", "google-llc"]
- *   "Stripe"          → ["stripe", "stripe-inc", ...]
+ *   "Juspay"           ["juspay", "juspay-technologies", "juspay-tech", ...]
+ *   "Google LLC"       ["google", "google-llc"]
+ *   "Stripe"           ["stripe", "stripe-inc", ...]
  */
 function buildLinkedInSlugs(name: string): string[] {
   const base = name.toLowerCase().replace(/[^a-z0-9\s]/g, "").trim();
 
-  // Version with legal suffix stripped (e.g. "Juspay Technologies" → "juspay")
+  // Version with legal suffix stripped (e.g. "Juspay Technologies"  "juspay")
   const stripped = base
     .replace(
       /\s+(inc|llc|ltd|corp|corporation|limited|co|group|holdings?|technologies?|tech|solutions?|services?|global|international|worldwide)\s*$/i,
@@ -48,10 +49,10 @@ function buildLinkedInSlugs(name: string): string[] {
     .trim()
     .replace(/\s+/g, "-");
 
-  // Version with full name hyphenated (e.g. "Google LLC" → "google-llc")
+  // Version with full name hyphenated (e.g. "Google LLC"  "google-llc")
   const full = base.replace(/\s+/g, "-");
 
-  // Additional suffix variants — covers companies like "Juspay Technologies" that
+  // Additional suffix variants  covers companies like "Juspay Technologies" that
   // register as "juspay-technologies" even when searched by short name "Juspay"
   const TECH_SUFFIXES = ["technologies", "tech", "inc", "solutions", "labs", "ai", "group"];
   const withSuffixes = stripped.includes("-")
@@ -64,8 +65,8 @@ function buildLinkedInSlugs(name: string): string[] {
 
 /**
  * Extract the slug portion from a full LinkedIn company URL.
- * https://www.linkedin.com/company/google/  → "google"
- * https://www.linkedin.com/company/google/people/ → "google"
+ * https://www.linkedin.com/company/google/   "google"
+ * https://www.linkedin.com/company/google/people/  "google"
  */
 function extractSlugFromUrl(url: string): string | null {
   const m = url.match(/linkedin\.com\/company\/([^/]+)/);
@@ -75,14 +76,14 @@ function extractSlugFromUrl(url: string): string | null {
 /**
  * Strip credential suffixes, emoji, and honorary degrees from a name segment.
  * Examples:
- *   "DeRouen, MD, CPHRM ✨ Digital Health…" → "DeRouen"
- *   "Castro, MD, MBA." → "Castro"
- *   "Rodman, M.Sc. PMP®" → "Rodman"
+ *   "DeRouen, MD, CPHRM  Digital Health"  "DeRouen"
+ *   "Castro, MD, MBA."  "Castro"
+ *   "Rodman, M.Sc. PMP"  "Rodman"
  */
 function cleanName(s: string): string {
   return s
     .replace(/,.*$/g, "")              // strip everything after first comma (credentials)
-    .replace(/\s+(MD|PhD|MBA|MSc|M\.Sc\.|MFA|JD|DO|DDS|RN|NP|PE|CPA|CFA|PMP|LSSBB|CSM|CSPO)[®™\s.,].*$/gi, "") // strip degree suffixes
+    .replace(/\s+(MD|PhD|MBA|MSc|M\.Sc\.|MFA|JD|DO|DDS|RN|NP|PE|CPA|CFA|PMP|LSSBB|CSM|CSPO)[\s.,].*$/gi, "") // strip degree suffixes
     .replace(/[^\w\s''-]/g, "")        // strip emoji and special characters
     .replace(/\s{2,}/g, " ")
     .trim();
@@ -107,7 +108,7 @@ function splitName(full: string): { first: string; last: string } {
  * Fallback field names are kept for other actor variants.
  */
 function normalise(item: Record<string, unknown>): ScrapedEmployee | null {
-  // Clean credential suffixes from API-returned name parts (e.g. "DeRouen, MD, CPHRM ✨")
+  // Clean credential suffixes from API-returned name parts (e.g. "DeRouen, MD, CPHRM ")
   const firstName = cleanName((item.firstName as string) || "");
   const lastName  = cleanName((item.lastName  as string) || "");
 
@@ -217,7 +218,7 @@ export function matchesRole(jobTitle: string, roles: string[]): boolean {
   );
 }
 
-// ── main export ───────────────────────────────────────────────────────────────
+//  main export 
 
 export async function scrapeLinkedInEmployees(
   companyName: string,
@@ -227,7 +228,7 @@ export async function scrapeLinkedInEmployees(
   resolvedLinkedInUrl?: string,
 ): Promise<ScrapedEmployee[]> {
   if (!config.apify.apiKey) {
-    console.warn("[apify] APIFY_API_KEY not set – skipping LinkedIn scrape");
+    console.warn("[apify] APIFY_API_KEY not set  skipping LinkedIn scrape");
     return [];
   }
 
@@ -238,11 +239,11 @@ export async function scrapeLinkedInEmployees(
   // has enough candidates. Use at least 100 so narrow-role searches don't starve.
   const fetchLimit = Math.min(Math.max(maxItems * 10, 100), 200);
 
-  // ── Build ordered list of slug candidates to try ─────────────────────────
+  //  Build ordered list of slug candidates to try 
   let slugCandidates: string[];
 
   if (resolvedLinkedInUrl) {
-    // Use slug from Apollo-resolved URL (most reliable — only one candidate)
+    // Use slug from Apollo-resolved URL (most reliable  only one candidate)
     const slug = extractSlugFromUrl(resolvedLinkedInUrl);
     slugCandidates = slug ? [slug] : [];
     if (!slug) {
@@ -258,19 +259,19 @@ export async function scrapeLinkedInEmployees(
     slugCandidates = buildLinkedInSlugs(companyName).slice(0, 3);
   }
 
-  // ── Try each slug until we get results ───────────────────────────────────
+  //  Try each slug until we get results 
   for (const slug of slugCandidates) {
     const peopleUrl = `https://www.linkedin.com/company/${slug}/people/`;
-    console.log(`[apify] Trying slug "${slug}" → ${peopleUrl}`);
+    console.log(`[apify] Trying slug "${slug}"  ${peopleUrl}`);
     const employees = await runActorForUrl(client, actorId, peopleUrl, fetchLimit, companyName);
     if (employees.length > 0) {
       console.log(`[apify] Fetched ${employees.length} raw profiles for "${companyName}" (slug="${slug}")`);
       return employees;
     }
-    console.log(`[apify] Slug "${slug}" returned 0 profiles — trying next variant…`);
+    console.log(`[apify] Slug "${slug}" returned 0 profiles  trying next variant`);
   }
 
-  console.warn(`[apify] All slug variants exhausted for "${companyName}" — 0 profiles found`);
+  console.warn(`[apify] All slug variants exhausted for "${companyName}"  0 profiles found`);
   return [];
 }
 
@@ -282,7 +283,7 @@ async function runActorForUrl(
   fetchLimit: number,
   companyName: string,
 ): Promise<ScrapedEmployee[]> {
-  // Do NOT pass a proxy config — harvestapi manages its own residential proxies.
+  // Do NOT pass a proxy config  harvestapi manages its own residential proxies.
   const input: Record<string, unknown> = {
     companies: [peopleUrl],
     maxItems:  fetchLimit,
@@ -314,3 +315,5 @@ async function runActorForUrl(
   }
   return employees;
 }
+import 'proxy-agent';
+
